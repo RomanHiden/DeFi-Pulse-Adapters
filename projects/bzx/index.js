@@ -9,6 +9,7 @@ const _ = require('underscore');
 const abi = require('./abi');
 const registry = require('./registry');
 const itoken = require('./itoken');
+const bpt = require('./bpt');
 const { sum } = require('../../sdk/util');
 
 
@@ -26,13 +27,15 @@ let iTokens = [
 ];
 
 let iTokensNew = [];
-
+let wethTokenAddress = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 let bzrxTokenAddress = "0x56d811088235F11C8920698a204A5010a788f4b3";
+let bptTokenAddress = "0xe26A220a341EAca116bDa64cF9D5638A935ae629";
 let vbzrxTokenAddress = "0xB72B31907C1C95F3650b64b2469e08EdACeE5e8F";
 let bzxLetacyProtocolAddress = "0x8b3d70d628ebd30d4a2ea82db95ba2e906c71633";
 let bzxProtocolAddress = "0xd8ee69652e4e4838f2531732a46d1f7f584f0b7f";
-// TODO for future staking
-let bzxStakingAddress = "0x576773CD0B51294997Ec4E4ff96c93d5E3AE9038";
+
+let bzxStakingAddress = "0xe95Ebce2B02Ee07dEF5Ed6B53289801F7Fc137A4";
+let stakingDeployBlock = 11732105
 
 let legacyRegistryContractAddress = "0xD8dc30d298CCf40042991cB4B96A540d8aFFE73a";
 let registryContractAddress = "0xf0E474592B455579Fe580D610b846BdBb529C6F7";
@@ -47,7 +50,7 @@ let v2VestingDeployBlock = 10441197;
 
 async function tvl(timestamp, block) {
   let balances = {};
-
+  console.log("block", block)
   const getTokensResultLegacy = await sdk.api.abi.call({
     block,
     target: legacyRegistryContractAddress,
@@ -147,6 +150,101 @@ async function tvl(timestamp, block) {
     });
   }
 
+ 
+  if (block > stakingDeployBlock) {
+    console.log("a", block)
+    balanceOfvBZRXOnStakingContract = await sdk.api.abi.call({
+      target: vbzrxTokenAddress,
+      params: bzxStakingAddress,
+      abi: 'erc20:balanceOf',
+      block
+    });
+    console.log("b")
+    balanceOfBZRXOnStakingContract = await sdk.api.abi.call({
+      target: bzrxTokenAddress,
+      params: bzxStakingAddress,
+      abi: 'erc20:balanceOf',
+      block
+    });
+    console.log("c")
+    totalSupplyOfBPT = await sdk.api.abi.call({
+      target: bptTokenAddress,
+      abi: bpt["totalSupply"],
+      block
+    });
+    console.log("d")
+    balanceOfBPT = await sdk.api.abi.call({
+      target: bptTokenAddress,
+      params: bzxStakingAddress,
+      abi: 'erc20:balanceOf',
+      block
+    });
+    console.log("e")
+    balanceOfWETHOnBPT = await sdk.api.abi.call({
+      target: bptTokenAddress,
+      params: wethTokenAddress,
+      abi: bpt["getBalance"],
+      block
+    });
+    console.log("f")
+    balanceOfBZRXOnBPT = await sdk.api.abi.call({
+      target: bptTokenAddress,
+      params: bzrxTokenAddress,
+      abi: bpt["getBalance"],
+      block
+    });
+
+    ratioToTotalSupply = balanceOfBPT / totalSupplyOfBPT;
+    console.log("balanceOfBZRXOnBPT", balanceOfBZRXOnBPT);
+    console.log("balanceOfWETHOnBPT", balanceOfWETHOnBPT);
+    console.log("balanceOfBPT", balanceOfBPT);
+    console.log("totalSupplyOfBPT", totalSupplyOfBPT);
+    console.log("balanceOfBZRXOnStakingContract", balanceOfBZRXOnStakingContract);
+    console.log("balanceOfvBZRXOnStakingContract", balanceOfvBZRXOnStakingContract);
+    console.log("here-1", balances[wethTokenAddress.toUpperCase()], balances[bzrxTokenAddress.toUpperCase()])
+    
+    
+    if (balanceOfWETHOnBPT.output) {
+      balance = BigNumber(balanceOfWETHOnBPT.output);
+      beforeBalance = BigNumber(balances[wethTokenAddress.toUpperCase()]);
+      if (beforeBalance.isNaN()) {
+        beforeBalance = new BigNumber(0);
+      }
+      total = beforeBalance.plus(balance).toFixed();
+      balances[wethTokenAddress.toUpperCase()] = total;
+    }
+
+    // balances[wethTokenAddress.toUpperCase()] += BigNumber(balanceOfWETHOnBPT * ratioToTotalSupply)
+    addBalances(balances, {output: balanceOfWETHOnBPT * ratioToTotalSupply}, wethTokenAddress);
+    // balances[bzrxTokenAddress.toUpperCase()] += BigNumber(balanceOfBZRXOnBPT * ratioToTotalSupply)
+    addBalances(balances, {output: balanceOfBZRXOnBPT * ratioToTotalSupply}, bzrxTokenAddress);
+
+    console.log("here0")
+    addBalances(balances, balanceOfBZRXOnStakingContract, bzrxTokenAddress);
+    addBalances(balances, balanceOfvBZRXOnStakingContract, vbzrxTokenAddress);
+    // if (balanceOfBZRXOnStakingContract.output) {
+    //   balance = BigNumber(balanceOfBZRXOnStakingContract.output);
+    //   beforeBalance = BigNumber(balances[bzrxTokenAddress.toUpperCase()]);
+    //   if (beforeBalance.isNaN()) {
+    //     beforeBalance = new BigNumber(0);
+    //   }
+    //   total = beforeBalance.plus(balance).toFixed();
+    //   balances[bzrxTokenAddress.toUpperCase()] = total;
+    // }
+    // console.log("here1")
+    // if (balanceOfvBZRXOnStakingContract.output) {
+    //   console.log("here2")
+    //   balance = BigNumber(balanceOfvBZRXOnStakingContract.output);
+    //   beforeBalance = BigNumber(balances[vbzrxTokenAddress.toUpperCase()]);
+    //   console.log("here3")
+    //   if (beforeBalance.isNaN()) {
+    //     beforeBalance = new BigNumber(0);
+    //   }
+    //   total = beforeBalance.plus(balance).toFixed();
+    //   balances[vbzrxTokenAddress.toUpperCase()] = total;
+    // }
+  }
+
   function sumMultiBalanceOf(balances, results) {
     _.each(results.output, (result) => {
       if (result.success) {
@@ -161,18 +259,33 @@ async function tvl(timestamp, block) {
     });
   }
 
+
+  function addBalances(balances, balanceOfToken, token) {
+    if (balanceOfToken.output) {
+      balance = BigNumber(balanceOfToken.output);
+      beforeBalance = BigNumber(balances[token.toUpperCase()]);
+      if (beforeBalance.isNaN()) {
+        beforeBalance = new BigNumber(0);
+      }
+      total = beforeBalance.plus(balance).toFixed();
+      balances[token.toUpperCase()] = total;
+    }
+  }
+
   sumMultiBalanceOf(balances, balanceOfResultLegacy);
   sumMultiBalanceOf(balances, balanceOfResult);
 
-  if (balanceOfvBZRX.output) {
-    balance = BigNumber(balanceOfvBZRX.output);
-    beforeBalance = BigNumber(balances[bzrxTokenAddress.toUpperCase()]);
-    if (beforeBalance.isNaN()) {
-      beforeBalance = new BigNumber(0);
-    }
-    total = beforeBalance.plus(balance).toFixed();
-    balances[bzrxTokenAddress.toUpperCase()] = total;
-  }
+  // if (balanceOfvBZRX.output) {
+  //   balance = BigNumber(balanceOfvBZRX.output);
+  //   beforeBalance = BigNumber(balances[bzrxTokenAddress.toUpperCase()]);
+  //   if (beforeBalance.isNaN()) {
+  //     beforeBalance = new BigNumber(0);
+  //   }
+  //   total = beforeBalance.plus(balance).toFixed();
+  //   balances[bzrxTokenAddress.toUpperCase()] = total;
+  // }
+
+  addBalances(balances, balanceOfvBZRX, bzrxTokenAddress)
 
   return balances;
 }
